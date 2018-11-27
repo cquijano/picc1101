@@ -290,7 +290,7 @@ uint8_t get_mod_word(modulation_t modulation_code)
 {
     switch (modulation_code)
     {
-        case MOD_OOK:
+        case MOD_OOK || MOD_OOK_ASYNC:
             return 3;
             break;
         case MOD_FSK2:
@@ -494,11 +494,17 @@ void init_radio_parms(radio_parms_t *radio_parms, arguments_t *arguments)
     radio_parms->modulation    = (radio_modulation_t) arguments->modulation;
     radio_parms->fec           = arguments->fec;
     radio_int_data.packet_length = arguments->packet_length;
+    radio_parms->async           = RX_TX_NORMAL;    //Normal operation 
 
     if (arguments->variable_length)
     {
         radio_parms->packet_config = PKTLEN_VARIABLE;  // Use variable packet length
         radio_int_data.packet_config = PKTLEN_VARIABLE;
+    }
+    else if (arguments->modulation == MOD_OOK_ASYNC )
+    {
+        radio_parms->async = RX_TX_ASYNC_SERIAL; 
+        radio_parms->sync_ctl = NO_SYNC; 
     }
     else
     {
@@ -571,14 +577,21 @@ int init_radio(radio_parms_t *radio_parms, spi_parms_t *spi_parms, arguments_t *
     //         De-asserts when RX FIFO is drained below the same threshold.
     // o 0x02: Asserts when the TX FIFO is filled at or above the TX FIFO threshold.
     //         De-asserts when the TX FIFO is below the same threshold.
-    PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG2,   0x00); // GDO2 output pin config.
+    if (arguments->modulation == MOD_OOK_ASYNC){
+      PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG2,   0x0D); // GDO2 output pin config, async mode.
+    }else{
+      PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG2,   0x00); // GDO2 output pin config.
+    }
 
     // IOCFG0 = 0x06: Asserts when sync word has been sent / received, and de-asserts at the
     // end of the packet. In RX, the pin will de-assert when the optional address
     // check fails or the RX FIFO overflows. In TX the pin will de-assert if the TX
     // FIFO underflows:    
-    PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG0,   0x06); // GDO0 output pin config.
-
+    if (arguments->modulation == MOD_OOK_ASYNC){
+      PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG0,   0x2E); // GDO0 High Impedance 
+    }else{
+      PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG0,   0x06); // GDO0 output pin config.
+    }
     // FIFO_THR = 14: 
     // o 5 bytes in TX FIFO (55 available spaces)
     // o 60 bytes in the RX FIFO
@@ -594,7 +607,7 @@ int init_radio(radio_parms_t *radio_parms, spi_parms_t *spi_parms, arguments_t *
     // . bit  3:   unused
     // . bit  2:   1  -> CRC enabled
     // . bits 1:0: xx -> Packet length mode. Taken from radio config.
-    reg_word = (arguments->whitening<<6) + 0x04 + (int) radio_parms->packet_config;
+    reg_word = (arguments->whitening<<6) + radio_parms->async + 0x04 + (int) radio_parms->packet_config;
     PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_PKTCTRL0, reg_word); // Packet automation control.
 
     // PKTCTRL1: Packet automation control #1
@@ -1041,7 +1054,12 @@ void radio_init_rx(spi_parms_t *spi_parms, arguments_t *arguments)
     radio_int_data.threshold_hits = 0;
     radio_set_packet_length(spi_parms, arguments->packet_length);
     
-    PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG2, 0x00); // GDO2 output pin config RX mode
+    if (arguments->modulation == MOD_OOK_ASYNC){
+      spi_parms->async = 1;
+      PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG2,   0x0D); // GDO2 output pin config, async mode.
+    }else{
+      PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG2,   0x00); // GDO2 output pin config RX mode
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1135,6 +1153,12 @@ uint32_t radio_receive_packet(spi_parms_t *spi_parms, arguments_t *arguments, ui
 }
 
 // ------------------------------------------------------------------------------------------------
+// Transmission async of a word 
+void radio_send_async(spi_parms_t *spi_parms, uint8_t block_countdown)
+// ------------------------------------------------------------------------------------------------
+{
+}
+// ------------------------------------------------------------------------------------------------
 // Transmission of a block
 void radio_send_block(spi_parms_t *spi_parms, uint8_t block_countdown)
 // ------------------------------------------------------------------------------------------------
@@ -1148,7 +1172,7 @@ void radio_send_block(spi_parms_t *spi_parms, uint8_t block_countdown)
 
     radio_set_packet_length(spi_parms, radio_int_data.tx_count);
 
-    PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG2,   0x02); // GDO2 output pin config TX mode
+   PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG2,   0x02); // GDO2 output pin config TX mode
 
     // Initial number of bytes to put in FIFO is either the number of bytes to send or the FIFO size whichever is
     // the smallest. Actual size blocks you need to take size minus one byte.
@@ -1184,6 +1208,10 @@ void radio_send_packet(spi_parms_t *spi_parms, arguments_t *arguments, uint8_t *
     uint8_t block_length;
 
     radio_int_data.tx_count = arguments->packet_length; // same block size for all
+
+    if (arguments->modulation == MOD_OOK_ASYNC ){
+      return radio_send_async(); /*Async modulation*/
+    }
 
     while (block_countdown >= 0)
     {

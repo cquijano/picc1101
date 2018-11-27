@@ -22,6 +22,7 @@ extern char *test_mode_names[];
 
 typedef enum modulation_e {
     MOD_OOK,
+    MOD_OOK_ASYNC,
     MOD_FSK2,
     MOD_FSK4,
     MOD_MSK,

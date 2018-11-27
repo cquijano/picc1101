@@ -40,6 +40,15 @@ typedef enum packet_config_e
     PKTLEN_INFINITE
 } packet_config_t;
 
+typedef enum async_config_e 
+{
+    RX_TX_NORMAL= 0,
+    RX_TX_SYNC_SERIAL,
+    TX_RANDOM,
+    RX_TX_ASYNC_SERIAL
+} async_config_t;
+
+
 typedef enum radio_modulation_e {
     RADIO_MOD_OOK,
     RADIO_MOD_FSK2,

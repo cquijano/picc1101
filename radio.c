@@ -443,14 +443,19 @@ void init_radio_int(spi_parms_t *spi_parms, arguments_t *arguments)
     radio_int_data.spi_parms = spi_parms;
     radio_int_data.wait_us = 8000000 / rate_values[arguments->rate]; // approximately 2-FSK byte delay
     p_radio_int_data = &radio_int_data;
+    
+    if (arguments->modulation == MOD_OOK_ASYNC ){
+      pinMode (WPI_GDO0, OUTPUT); /*On Async modulation we user GDO0 to set the signal*/
+      digitalWrite (WPI_GDO0,  LOW);
+      /*TODO Check for RX*/
+    }else{
+      wiringPiISR(WPI_GDO0, INT_EDGE_BOTH, &int_packet);       // set interrupt handler for packet interrupts
 
-    wiringPiISR(WPI_GDO0, INT_EDGE_BOTH, &int_packet);       // set interrupt handler for packet interrupts
-
-    if (arguments->packet_length >= PI_CCxxx0_FIFO_SIZE)
-    {
+      if (arguments->packet_length >= PI_CCxxx0_FIFO_SIZE)
+      {
         wiringPiISR(WPI_GDO2, INT_EDGE_BOTH, &int_threshold); // set interrupt handler for FIFO threshold interrupts
+      }
     }
-
     verbprintf(1, "Unit delay .............: %d us\n", radio_int_data.wait_us);
     verbprintf(1, "Packet delay ...........: %d us\n", arguments->packet_delay * radio_int_data.wait_us);
 }
@@ -494,7 +499,6 @@ void init_radio_parms(radio_parms_t *radio_parms, arguments_t *arguments)
     radio_parms->modulation    = (radio_modulation_t) arguments->modulation;
     radio_parms->fec           = arguments->fec;
     radio_int_data.packet_length = arguments->packet_length;
-    radio_parms->async           = RX_TX_NORMAL;    //Normal operation 
 
     if (arguments->variable_length)
     {
@@ -1165,25 +1169,29 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
   int short_pulse=375;
   //int long_pulse=2687;/*this is calculated*/
   int symbol_time=3080;
-  times = 5;
+  times = 50;
+  verbprintf(1,"Send Radio Async\n");
+  verbprintf(1,"Send %s \n", radio_int_data.tx_buf);
   
   pinMode (WPI_GDO0, OUTPUT) ;
   digitalWrite (WPI_GDO0,  LOW);
-
+  radio_int_data.tx_buf[0]=0xAA;
+  
   PI_CC_SPIStrobe(spi_parms, PI_CCxxx0_STX); // Kick-off Tx
   while(times){
-    _bits=packet_length;
+    //_bits=packet_length;
+    _bits=8;
     
     while(_bits) {
       digitalWrite (WPI_GDO0,  HIGH); 
       /*1 is the SHORT time and 0 Long time*/
       if ( radio_int_data.tx_buf[0] & (1 << (_bits-1)) ){
-        //PRINTF("1");
+        verbprintf(1,"1");
         /*Short Pulse*/
         delayMicroseconds(short_pulse); 
         gap_time = symbol_time - short_pulse; 
       }else{
-        //PRINTF("0");
+        verbprintf(1,"0");
         /*Long Pulse*/
         delayMicroseconds(symbol_time - short_pulse); 
         gap_time = short_pulse;
@@ -1193,7 +1201,7 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
       delayMicroseconds(short_pulse);
       _bits--;
     }
-    //PRINTF("\n");
+    verbprintf(1,"\n");
     times--;
     /*Wait 10 * code->symbol_time*/
     delayMicroseconds(10 *  symbol_time); 
@@ -1253,6 +1261,7 @@ void radio_send_packet(spi_parms_t *spi_parms, arguments_t *arguments, uint8_t *
     radio_int_data.tx_count = arguments->packet_length; // same block size for all
 
     if (arguments->modulation == MOD_OOK_ASYNC ){
+      verbprintf(1,"Modulation is OOK_ASYNC\n");
       return radio_send_async(spi_parms, arguments->packet_length);/*Async Modulation*/
     }
 

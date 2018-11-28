@@ -63,6 +63,7 @@ typedef struct radio_parms_s
     uint32_t           f_xtal;        // Crystal frequency (Hz)
     uint32_t           f_if;          // IF frequency (Hz)
     packet_config_t    packet_config; // Packet length configuration
+    uint8_t            async;         // Async modulation 
     uint8_t            packet_length; // Packet length if fixed
     radio_modulation_t modulation;    // Type of modulation
     uint8_t            fec;           // FEC is in use
@@ -93,6 +94,8 @@ typedef enum radio_mode_e
     RADIOMODE_NONE = 0,
     RADIOMODE_RX,
     RADIOMODE_TX,
+    RADIOMODE_ASYNC_RX,
+    RADIOMODE_ASYNC_TX,
     NUM_RADIOMODE
 } radio_mode_t;
 

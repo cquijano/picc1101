@@ -1054,7 +1054,6 @@ void radio_init_rx(spi_parms_t *spi_parms, arguments_t *arguments)
     radio_set_packet_length(spi_parms, arguments->packet_length);
     
     if (arguments->modulation == MOD_OOK_ASYNC){
-      spi_parms->async = 1;
       radio_int_data.mode = RADIOMODE_ASYNC_RX;
       PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG2,   0x0D); // GDO2 output pin config, async mode.
     }else{
@@ -1158,8 +1157,8 @@ uint32_t radio_receive_packet(spi_parms_t *spi_parms, arguments_t *arguments, ui
 void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
 // ------------------------------------------------------------------------------------------------
 {
-  static int _bits;
-  static int times,gap_time; 
+  int _bits;
+  int times,gap_time; 
   /*Symbol time 148 @48Khz => 3.08ms=> 3080*/
   /*Short 18 @48Khz => 0.375ms => 375*/
   /*Long 129 @48kz => 2.6875ms => 2687,5*/
@@ -1178,7 +1177,7 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
     while(_bits) {
       digitalWrite (WPI_GDO0,  HIGH); 
       /*1 is the SHORT time and 0 Long time*/
-      if ( radio_int_data.tx_buf(1 << (_bits-1))){
+      if ( radio_int_data.tx_buf[0] & (1 << (_bits-1)) ){
         //PRINTF("1");
         /*Short Pulse*/
         delayMicroseconds(short_pulse); 
@@ -1190,8 +1189,8 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
         gap_time = short_pulse;
       }
      /*Wait code->gap*/
-      digitalWrite (WPI_GDO0,  LOW) 
-      radio_wait_a_bit(gap_time);
+      digitalWrite (WPI_GDO0,  LOW); 
+      delayMicroseconds(short_pulse);
       _bits--;
     }
     //PRINTF("\n");
@@ -1201,7 +1200,6 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
   }
   PI_CC_SPIStrobe(spi_parms, PI_CCxxx0_SIDLE);
   pinMode (WPI_GDO0, INPUT) ;
-  return 1;
 }
 // ------------------------------------------------------------------------------------------------
 // Transmission of a block

@@ -37,7 +37,7 @@ char *test_mode_names[] = {
 
 char *modulation_names[] = {
     "OOK",
-    "OOK-PULSE"
+    "OOK-PULSE",
     "2-FSK",
     "4-FSK",
     "MSK",

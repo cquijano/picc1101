@@ -613,9 +613,12 @@ int init_radio(radio_parms_t *radio_parms, spi_parms_t *spi_parms, arguments_t *
     // . bit  3:   unused
     // . bit  2:   1  -> CRC enabled
     // . bits 1:0: xx -> Packet length mode. Taken from radio config.
-    reg_word = (arguments->whitening<<6) + radio_parms->async + 0x04 + (int) radio_parms->packet_config;
-    //PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_PKTCTRL0, reg_word); // Packet automation control.
-    PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_PKTCTRL0, 0x31); // Packet automation control.
+    if (arguments->modulation == MOD_OOK_ASYNC){
+      PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_PKTCTRL0, 0x31); // Packet automation control.
+    }else{
+      reg_word = (arguments->whitening<<6) + radio_parms->async + 0x04 + (int) radio_parms->packet_config;
+      PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_PKTCTRL0, reg_word); // Packet automation control.
+    }
 
     // PKTCTRL1: Packet automation control #1
     // . bits 7:5: 000 -> Preamble quality estimator threshold
@@ -670,9 +673,12 @@ int init_radio(radio_parms_t *radio_parms, spi_parms_t *spi_parms, arguments_t *
     // o bits 6:4: xxx -> (provided)
     // o bit 3:    0   -> Manchester disabled (1: enable)
     // o bits 2:0: 011 -> Sync word qualifier is 30/32 (static init in radio interface)
-    reg_word = (get_mod_word(arguments->modulation)<<4) + radio_parms->sync_ctl;
-    PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_MDMCFG2,  reg_word); // Modem configuration.
-    PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_MDMCFG2,  0x30); // Modem configuration.
+    if (arguments->modulation == MOD_OOK_ASYNC){
+      PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_MDMCFG2,  0x30); // Modem configuration.
+    }else{
+      reg_word = (get_mod_word(arguments->modulation)<<4) + radio_parms->sync_ctl;
+      PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_MDMCFG2,  reg_word); // Modem configuration.
+    }
 
     // MODCFG1 Modem configuration: FEC, Preamble, exponent for channel spacing
     // o bit 7:    0   -> FEC disabled (1: enable)

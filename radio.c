@@ -524,6 +524,7 @@ int init_radio(radio_parms_t *radio_parms, spi_parms_t *spi_parms, arguments_t *
 {
     int ret = 0;
     uint8_t  reg_word;
+    uint8_t patable[8]=PA_TABLE;
 
     verbprintf(1, "\ninit_radio...\n");
 
@@ -582,6 +583,7 @@ int init_radio(radio_parms_t *radio_parms, spi_parms_t *spi_parms, arguments_t *
     // o 0x02: Asserts when the TX FIFO is filled at or above the TX FIFO threshold.
     //         De-asserts when the TX FIFO is below the same threshold.
     if (arguments->modulation == MOD_OOK_ASYNC){
+      PI_CC_SPIWriteBurstReg(spi_parms, PI_CCxxx0_PATABLE,patable ,sizeof(patable));
       PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG2,   0x0D); // GDO2 output pin config, async mode.
     }else{
       PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG2,   0x00); // GDO2 output pin config.
@@ -869,7 +871,11 @@ int init_radio(radio_parms_t *radio_parms, spi_parms_t *spi_parms, arguments_t *
     //   index to use when transmitting a ‘1’. PATABLE index zero is used in OOK/ASK when transmitting a ‘0’. 
     //   The PATABLE settings from index ‘0’ to the PA_POWER value are used for ASK TX shaping, 
     //   and for power ramp-up/ramp-down at the start/end of transmission in all TX modulation formats.
-    PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_FREND0,   0x10); // Front end RX configuration.
+    if (arguments->modulation == MOD_OOK_ASYNC){
+      PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_FREND0,   0x11); // Use Pa Table 
+    else{
+      PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_FREND0,   0x10); // Front end RX configuration.
+    }
 
     // FSCAL3: Frequency Synthesizer Calibration
     // o bits 7:6: The value to write in this field before calibration is given by the SmartRF
@@ -891,7 +897,7 @@ int init_radio(radio_parms_t *radio_parms, spi_parms_t *spi_parms, arguments_t *
     PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_TEST1,    0x31); // Various test settings.
 
     // TEST0: Various test settings. The value to write in this field is given by the SmartRF Studio software.
-    PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_TEST0,    0x09); // Various test settings.
+    //PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_TEST0,    0x09); // Various test settings.
 
     if (arguments->verbose_level > 0)
     {
@@ -1186,12 +1192,10 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
       digitalWrite (WPI_GDO0,  HIGH); 
       /*1 is the SHORT time and 0 Long time*/
       if ( radio_int_data.tx_buf[0] & (1 << (_bits-1)) ){
-        verbprintf(1,"1");
         /*Short Pulse*/
         delayMicroseconds(short_pulse); 
         gap_time = symbol_time - short_pulse; 
       }else{
-        verbprintf(1,"0");
         /*Long Pulse*/
         delayMicroseconds(symbol_time - short_pulse); 
         gap_time = short_pulse;
@@ -1201,7 +1205,6 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
       delayMicroseconds(short_pulse);
       _bits--;
     }
-    verbprintf(1,"\n");
     times--;
     /*Wait 10 * code->symbol_time*/
     delayMicroseconds(10 *  symbol_time); 

@@ -21,6 +21,9 @@
 
 #define RADIO_BUFSIZE (1<<16)   // 256 max radio block size times a maximum of 256 radio blocs
 
+#define PA_TABLE {0x00,0xC0,0x00,0x00,0x00,0x00,0x00,0x00}
+  static uint8_t patable[8]=PA_TABLE;
+
 typedef enum sync_word_e
 {
     NO_SYNC = 0,              // No preamble/sync

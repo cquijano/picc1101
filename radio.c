@@ -614,7 +614,8 @@ int init_radio(radio_parms_t *radio_parms, spi_parms_t *spi_parms, arguments_t *
     // . bit  2:   1  -> CRC enabled
     // . bits 1:0: xx -> Packet length mode. Taken from radio config.
     reg_word = (arguments->whitening<<6) + radio_parms->async + 0x04 + (int) radio_parms->packet_config;
-    PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_PKTCTRL0, reg_word); // Packet automation control.
+    //PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_PKTCTRL0, reg_word); // Packet automation control.
+    PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_PKTCTRL0, 0x31); // Packet automation control.
 
     // PKTCTRL1: Packet automation control #1
     // . bits 7:5: 000 -> Preamble quality estimator threshold
@@ -671,6 +672,7 @@ int init_radio(radio_parms_t *radio_parms, spi_parms_t *spi_parms, arguments_t *
     // o bits 2:0: 011 -> Sync word qualifier is 30/32 (static init in radio interface)
     reg_word = (get_mod_word(arguments->modulation)<<4) + radio_parms->sync_ctl;
     PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_MDMCFG2,  reg_word); // Modem configuration.
+    PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_MDMCFG2,  0x30); // Modem configuration.
 
     // MODCFG1 Modem configuration: FEC, Preamble, exponent for channel spacing
     // o bit 7:    0   -> FEC disabled (1: enable)
@@ -873,7 +875,7 @@ int init_radio(radio_parms_t *radio_parms, spi_parms_t *spi_parms, arguments_t *
     //   and for power ramp-up/ramp-down at the start/end of transmission in all TX modulation formats.
     if (arguments->modulation == MOD_OOK_ASYNC){
       PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_FREND0,   0x11); // Use Pa Table 
-    else{
+    }else{
       PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_FREND0,   0x10); // Front end RX configuration.
     }
 
@@ -1177,8 +1179,8 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
   int symbol_time=3080;
   times = 50;
   verbprintf(1,"Send Radio Async\n");
-  verbprintf(1,"Send %s \n", radio_int_data.tx_buf);
-  
+  verbprintf(1,"Send %02X\n", radio_int_data.tx_buf[0]); 
+ 
   pinMode (WPI_GDO0, OUTPUT) ;
   digitalWrite (WPI_GDO0,  LOW);
   radio_int_data.tx_buf[0]=0xAA;

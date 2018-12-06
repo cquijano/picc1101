@@ -75,6 +75,16 @@ float chanbw_limits[] = {
     58000.0
 };
 
+typedef struct bit_code_t{
+    long long int code;
+    int len;
+    unsigned int sync_pulse;
+    unsigned int freq;
+    unsigned int symbol_time;
+    unsigned int times; /*it is useful only on tx*/
+}bit_code_t;
+
+
 static radio_int_data_t *p_radio_int_data = 0;
 static radio_int_data_t radio_int_data;
 uint32_t blocks_sent;
@@ -247,13 +257,213 @@ void int_threshold(void)
         }        
     }
 }
+
+#define RX_BUF_LEN      8
+
+static bit_code_t rx_buf [RX_BUF_LEN];/*reception buffer*/
+static bit_code_t code;
+
+static int pos,min_pulse,longest_pulse,symbol_time;
+static int frames;
+
+int get_sync_pulse(int pulse_time){
+  static int pulse_times[64];
+  static int len = sizeof(pulse_times)/sizeof(pulse_times[0]);
+  static int i;
+
+  /*We will use the first frame to get the sync pulse*/
+  if (frames){
+    memset(pulse_times, 0, sizeof pulse_times);
+    i=0;
+    return min_pulse;
+  }
+
+  /*if !frames => Calculate the new sync pulse*/
+  pulse_times[i]=pulse_time;
+  i++;
+
+  min_pulse=pulse_times[0];
+  longest_pulse=pulse_times[0];
+
+  for (i=0; i<len; i++){
+    if (!pulse_times[i]){
+      break;
+    }
+    if (longest_pulse < pulse_times[i]){
+      longest_pulse = pulse_times[i];
+    }
+    if(min_pulse > pulse_times[i]){
+      min_pulse=pulse_times[i];
+    }
+  }
+  
+  return 0;
+}
+
+int set_data(int pulse_time){
+  /**
+   * Glich Filter
+   * The glich has normally a length of 10us => RTIMER_ARCH_SECOND=65536
+   * so we set to 50us to be sure => 3 counts
+   * */
+  if (pulse_time < 3){
+    return 0;
+  }
+
+  if (!get_sync_pulse(pulse_time))
+    return 1;
+
+  rx_buf[pos].code = ( (rx_buf[pos].code<<1) | ( pulse_time < min_pulse+(min_pulse/2) ) );
+  rx_buf[pos].len++;
+  return 0;
+}
+int set_code(void){
+  int i;
+  int _len=0,match=0;
+  long long int _code=0;
+
+
+  /*First code is for sync, dont trust 0*/
+  _code=rx_buf[1].code;
+  _len=rx_buf[1].len;
+
+  /*Maybe not the best idea*/
+  if (!_code)
+    return 0;
+
+  for (i=0;i<RX_BUF_LEN;i++){
+      if (rx_buf[i].len == _len){
+          if(_code!=rx_buf[i].code)
+              continue; /*Invalid code*/
+          else
+              match++;
+      }
+  }
+
+  if (match < 3)
+      return 0;
+
+  if (frames < 5)
+      return 0;
+
+  if (min_pulse==longest_pulse)
+    return 0;
+
+  if ( ( (_code & 0xFF) == 0xFF) || min_pulse < 10 )
+      return 0; /*Async Error*/
+
+  code.len=_len;
+  code.code=_code;
+  //code.freq=counter_to_freq(freq);
+  code.symbol_time=symbol_time;
+  code.sync_pulse=min_pulse;
+
+  for (i=0;i<RX_BUF_LEN;i++){
+    rx_buf[i].len = 0;
+    rx_buf[i].code = 0;
+  }
+
+  verbprintf(1,"================CODE IS ok[%llX] len %i match %i freq %u sync_pulse %u symbol_time %u=================\n",code.code,code.len,match, code.freq,code.sync_pulse,code.symbol_time);
+  return 1;
+}
+
+void end_timer_cb(void *ptr){
+  int i;
+  if (frames<5){
+    frames=0;
+    min_pulse=0;
+    symbol_time=0;
+    longest_pulse=0;
+    return;
+  }
+
+  for (i=0;i<RX_BUF_LEN;i++){
+      verbprintf(1,"[%i] code [%llX] length [%i]\n", i ,rx_buf[i].code , rx_buf[i].len );
+  }
+  verbprintf(1,"min pulse %i\n",min_pulse);
+  verbprintf(1,"longest_pulse pulse %i\n",longest_pulse);
+  verbprintf(1,"frames [%i]\n",frames);
+  verbprintf(1,"symbol time [%i]\n",symbol_time);
+
+  if (set_code()){
+    verbprintf(1,"Calling cb\n");
+    //TODO Printf the code in json
+  }
+  for (i=0;i<RX_BUF_LEN;i++){
+      rx_buf[pos].code=0;
+      rx_buf[pos].len=0;
+  }
+  frames=0;
+  min_pulse=0;
+  longest_pulse=0;
+  symbol_time=0;
+  return;
+}
+
+PI_THREAD(end_timer)
+{
+  for (;;)
+  {
+    delay (500);
+    end_timer_cb(NULL);
+  }
+}  
+
+int end_rx_frame(void){
+ 
+  if (!min_pulse){
+    return 0; /*Sync Error*/
+  }
+
+  frames++; /*Start count when we have a sync word*/
+
+  /*There is no codes shroter than 7, so if the code is 7 or less, discard it*/
+  if (rx_buf[pos].len < 7 || rx_buf[pos].code==0){
+      rx_buf[pos].code=0;
+      rx_buf[pos].len=0;
+      return 0;
+  }
+
+  pos++;/*new word*/
+
+  if (pos==RX_BUF_LEN){
+    pos=0;
+    end_timer_cb(NULL);
+  }
+
+  rx_buf[pos].code=0;
+  rx_buf[pos].len=0;
+
+  return 1;
+}
+
 void int_async_rx(void)
 // ------------------------------------------------------------------------------------------------
 {
-    uint8_t x_byte, *p_byte, int_line, rssi_dec, crc_lqi;
-    int i;
+  static int last_bit;
+  static unsigned int pulse_start,pulse_end,pulse_len;
 
-    int_line = digitalRead(WPI_GDO2);
+  //verbprintf(1, "Data recieve\n");
+  //last_bit=ti_lib_gpio_read_dio(BOARD_IOID_RX_CC1101);
+  last_bit = digitalRead(WPI_GDO2);
+
+  if(last_bit) {
+    /*Pulse begins*/
+    if (min_pulse){
+      if ((micros() - pulse_end) > ( 5 * min_pulse) ){
+        end_rx_frame();
+      }else{
+        /*Get the symbol time*/
+        symbol_time = micros() - pulse_start;
+      }
+    }
+    pulse_start = micros();
+  }else{
+    /*Pulse Ends*/
+    pulse_len = micros() - pulse_start;
+    pulse_end = micros();
+    set_data(pulse_len);
+  }
 }
 // === Static functions ===========================================================================
 
@@ -457,6 +667,7 @@ void init_radio_int(spi_parms_t *spi_parms, arguments_t *arguments)
       /*For RX we user pin GDO2*/
       pinMode (WPI_GDO2, INPUT);
       wiringPiISR(WPI_GDO2, INT_EDGE_BOTH, &int_async_rx);
+      piThreadCreate (end_timer);
     }else{
       wiringPiISR(WPI_GDO0, INT_EDGE_BOTH, &int_packet);       // set interrupt handler for packet interrupts
 
@@ -1083,6 +1294,7 @@ void radio_init_rx(spi_parms_t *spi_parms, arguments_t *arguments)
     if (arguments->modulation == MOD_OOK_ASYNC){
       radio_int_data.mode = RADIOMODE_ASYNC_RX;
       PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG2,   0x0D); // GDO2 output pin config, async mode.
+      verbprintf(1, "RX WITH ASYNC\n");
     }else{
       radio_int_data.mode = RADIOMODE_RX;
       PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_IOCFG2,   0x00); // GDO2 output pin config RX mode

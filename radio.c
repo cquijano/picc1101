@@ -247,7 +247,14 @@ void int_threshold(void)
         }        
     }
 }
+void int_async_rx(void)
+// ------------------------------------------------------------------------------------------------
+{
+    uint8_t x_byte, *p_byte, int_line, rssi_dec, crc_lqi;
+    int i;
 
+    int_line = digitalRead(WPI_GDO2);
+}
 // === Static functions ===========================================================================
 
 // ------------------------------------------------------------------------------------------------
@@ -447,7 +454,9 @@ void init_radio_int(spi_parms_t *spi_parms, arguments_t *arguments)
     if (arguments->modulation == MOD_OOK_ASYNC ){
       pinMode (WPI_GDO0, OUTPUT); /*On Async modulation we user GDO0 to set the signal*/
       digitalWrite (WPI_GDO0,  LOW);
-      /*TODO Check for RX*/
+      /*For RX we user pin GDO2*/
+      pinMode (WPI_GDO2, INPUT);
+      wiringPiISR(WPI_GDO2, INT_EDGE_BOTH, &int_async_rx);
     }else{
       wiringPiISR(WPI_GDO0, INT_EDGE_BOTH, &int_packet);       // set interrupt handler for packet interrupts
 
@@ -1185,13 +1194,12 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
   int symbol_time=3080;
   times = 50;
   verbprintf(1,"Send Radio Async\n");
-  verbprintf(1,"Send %02X\n", radio_int_data.tx_buf[0]); 
  
   pinMode (WPI_GDO0, OUTPUT) ;
   digitalWrite (WPI_GDO0,  LOW);
-  radio_int_data.tx_buf[0]=0xAA;
-  
   PI_CC_SPIStrobe(spi_parms, PI_CCxxx0_STX); // Kick-off Tx
+  radio_int_data.tx_buf[0]=0xAA; 
+  verbprintf(1,"Send %02X\n", radio_int_data.tx_buf[0]); 
   while(times){
     //_bits=packet_length;
     _bits=8;

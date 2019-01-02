@@ -1420,26 +1420,26 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
       //_bits=packet_length;
       _bits=8;
       while(_bits) {
-      digitalWrite (WPI_GDO0,  HIGH); 
-      /*1 is the SHORT time and 0 Long time*/
-      if ( radio_int_data.tx_buf[word] & (1 << (_bits-1)) ){
-        /*Short Pulse*/
-        delayMicroseconds(short_pulse); 
-        gap_time = symbol_time - short_pulse; 
-      }else{
-        /*Long Pulse*/
-        delayMicroseconds(symbol_time - short_pulse); 
-        gap_time = short_pulse;
-      }
-      /*Wait code->gap*/
-      digitalWrite (WPI_GDO0,  LOW); 
-      delayMicroseconds(gap_time);
-      _bits--;
+        digitalWrite (WPI_GDO0,  HIGH); 
+        /*1 is the SHORT time and 0 Long time*/
+        if ( radio_int_data.tx_buf[word] & (1 << (_bits-1)) ){
+          /*Short Pulse*/
+          delayMicroseconds(short_pulse); 
+          gap_time = symbol_time - short_pulse; 
+        }else{
+          /*Long Pulse*/
+          delayMicroseconds(symbol_time - short_pulse); 
+          gap_time = short_pulse;
+        }
+        _bits--;
+        /*Wait code->gap*/
+        digitalWrite (WPI_GDO0,  LOW); 
+        delayMicroseconds(gap_time);
       }
     }
     times--;
     /*Wait 10 * code->symbol_time*/
-    delayMicroseconds(10 *  symbol_time); 
+    delayMicroseconds(6 *  symbol_time); 
   }
   PI_CC_SPIStrobe(spi_parms, PI_CCxxx0_SIDLE);
   pinMode (WPI_GDO0, INPUT) ;

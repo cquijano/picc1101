@@ -397,6 +397,7 @@ void end_timer_cb(void *ptr){
   min_pulse=0;
   longest_pulse=0;
   symbol_time=0;
+  verbprintf(1,"RESET\n");
   return;
 }
 
@@ -1397,6 +1398,7 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
 // ------------------------------------------------------------------------------------------------
 {
   int _bits;
+  int word;
   int times,gap_time; 
   /*Symbol time 148 @48Khz => 3.08ms=> 3080*/
   /*Short 18 @48Khz => 0.375ms => 375*/
@@ -1404,22 +1406,23 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
   int short_pulse=375;
   //int long_pulse=2687;/*this is calculated*/
   int symbol_time=3080;
-  times = 50;
+  times = 500;
   verbprintf(1,"Send Radio Async\n");
  
   pinMode (WPI_GDO0, OUTPUT) ;
   digitalWrite (WPI_GDO0,  LOW);
   PI_CC_SPIStrobe(spi_parms, PI_CCxxx0_STX); // Kick-off Tx
-  radio_int_data.tx_buf[0]=0xAA; 
-  verbprintf(1,"Send %02X\n", radio_int_data.tx_buf[0]); 
+  radio_int_data.tx_buf[0]=0xCC; 
+  radio_int_data.tx_buf[1]=0xCD; 
   while(times){
-    //_bits=packet_length;
-    _bits=8;
-    
-    while(_bits) {
+    for(word=0;word<2;word++){
+      //verbprintf(1,"Send word %i %02X\n",word, radio_int_data.tx_buf[word]); 
+      //_bits=packet_length;
+      _bits=8;
+      while(_bits) {
       digitalWrite (WPI_GDO0,  HIGH); 
       /*1 is the SHORT time and 0 Long time*/
-      if ( radio_int_data.tx_buf[0] & (1 << (_bits-1)) ){
+      if ( radio_int_data.tx_buf[word] & (1 << (_bits-1)) ){
         /*Short Pulse*/
         delayMicroseconds(short_pulse); 
         gap_time = symbol_time - short_pulse; 
@@ -1428,10 +1431,11 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
         delayMicroseconds(symbol_time - short_pulse); 
         gap_time = short_pulse;
       }
-     /*Wait code->gap*/
+      /*Wait code->gap*/
       digitalWrite (WPI_GDO0,  LOW); 
-      delayMicroseconds(short_pulse);
+      delayMicroseconds(gap_time);
       _bits--;
+      }
     }
     times--;
     /*Wait 10 * code->symbol_time*/

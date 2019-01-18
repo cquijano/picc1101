@@ -306,17 +306,26 @@ int set_data(int pulse_time){
    * The glich has normally a length of 10us => RTIMER_ARCH_SECOND=65536
    * so we set to 50us to be sure => 3 counts
    * */
-  if (pulse_time < 3){
+  if (pulse_time < 10){
     return 0;
   }
 
   if (!get_sync_pulse(pulse_time))
     return 1;
 
+  if (pulse_time < min_pulse){
+    return 0;
+  }
+
+  if (pulse_time > longest_pulse){
+    return 0;
+  }
+
   rx_buf[pos].code = ( (rx_buf[pos].code<<1) | ( pulse_time < min_pulse+(min_pulse/2) ) );
   rx_buf[pos].len++;
   return 0;
 }
+
 int set_code(void){
   int i;
   int _len=0,match=0;
@@ -363,7 +372,8 @@ int set_code(void){
     rx_buf[i].code = 0;
   }
 
-  verbprintf(1,"================CODE IS ok[%llX] len %i match %i freq %u sync_pulse %u symbol_time %u=================\n",code.code,code.len,match, code.freq,code.sync_pulse,code.symbol_time);
+  //verbprintf(1,"================CODE IS ok[%llX] len %i match %i freq %u sync_pulse %u symbol_time %u=================\n",code.code,code.len,match, code.freq,code.sync_pulse,code.symbol_time);
+  verbprintf(1,"\n{\"code\":%lli,\"len\":%i,\"match\":%i,\"freq\":%u, \"sync_pulse\":%u,\"symbol_time\":%u}\n",code.code,code.len,match, code.freq,code.sync_pulse,code.symbol_time);
   return 1;
 }
 
@@ -1406,7 +1416,7 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
   int short_pulse=375;
   //int long_pulse=2687;/*this is calculated*/
   int symbol_time=3080;
-  times = 500;
+  times = 10000;
   verbprintf(1,"Send Radio Async\n");
  
   pinMode (WPI_GDO0, OUTPUT) ;

@@ -341,12 +341,9 @@ int set_code(void){
     return 0;
 
   for (i=0;i<RX_BUF_LEN;i++){
-      if (rx_buf[i].len == _len){
-          if(_code!=rx_buf[i].code)
-              continue; /*Invalid code*/
-          else
-              match++;
-      }
+    if (rx_buf[i].len == _len){
+      match++;/*Only for test check there are 2 codes*/
+    }
   }
 
   if (match < 3)

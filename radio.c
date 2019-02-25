@@ -327,36 +327,35 @@ int set_data(int pulse_time){
 }
 
 int set_code(void){
-  int i;
+  int i,index;
   int _len=0,match=0;
   long long int _code=0;
-
-
-  /*First code is for sync, dont trust 0*/
-  _code=rx_buf[1].code;
-  _len=rx_buf[1].len;
-
-  /*Maybe not the best idea*/
-  if (!_code)
-    return 0;
-
-  for (i=0;i<RX_BUF_LEN;i++){
-    if (rx_buf[i].len == _len){
-      match++;/*Only for test check there are 2 codes*/
-    }
-  }
-
-  if (match < 3)
-      return 0;
 
   if (frames < 5)
       return 0;
 
-  if (min_pulse==longest_pulse)
-    return 0;
+  for (index=0;index<RX_BUF_LEN;index++){
+    _code=rx_buf[index].code;
+    _len=rx_buf[index].len;
 
-  if ( ( (_code & 0xFF) == 0xFF) || min_pulse < 10 )
-      return 0; /*Async Error*/
+    /*Maybe not the best idea*/
+    if (!_code)
+      continue;
+
+    if ( ( (_code & 0xFF) == 0xFF) || min_pulse < 10 )
+      continue; /*Async Error*/
+    
+    match=0;
+
+    for (i=0;i<RX_BUF_LEN;i++){
+      if (rx_buf[i].len == _len && rx_buf[i].code==_code){
+        match++;
+      }
+    }
+
+    if (match > 2)
+      break;
+  }
 
   code.len=_len;
   code.code=_code;

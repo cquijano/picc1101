@@ -1403,12 +1403,12 @@ uint32_t radio_receive_packet(spi_parms_t *spi_parms, arguments_t *arguments, ui
 
 // ------------------------------------------------------------------------------------------------
 // Transmission async of a word 
-void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
+void radio_send_async(spi_parms_t *spi_parms, const uint8_t *packet, uint32_t size)
 // ------------------------------------------------------------------------------------------------
 {
   int _bits;
   int word;
-  int times,gap_time; 
+  int times,gap_time;
   /*Symbol time 148 @48Khz => 3.08ms=> 3080*/
   /*Short 18 @48Khz => 0.375ms => 375*/
   /*Long 129 @48kz => 2.6875ms => 2687,5*/
@@ -1417,12 +1417,18 @@ void radio_send_async(spi_parms_t *spi_parms, uint8_t packet_length)
   int symbol_time=3080;
   times = 10000;
   verbprintf(1,"Send Radio Async\n");
- 
+
   pinMode (WPI_GDO0, OUTPUT) ;
   digitalWrite (WPI_GDO0,  LOW);
   PI_CC_SPIStrobe(spi_parms, PI_CCxxx0_STX); // Kick-off Tx
-  radio_int_data.tx_buf[0]=0xCC; 
-  radio_int_data.tx_buf[1]=0xCD; 
+  /* Send the caller's actual packet bytes (e.g. -y test phrase) instead of
+   * a hardcoded 0xCC/0xCD — that pattern has 5 short ("1") pulses in its
+   * first 16 bits, which is enough to trip the garage decoder's Keeloq
+   * preamble heuristic (>=5) and permanently block its fixcode path for
+   * the rest of that frame, so the frame never reaches the >=16-bit
+   * minimum the lab decoder requires. */
+  radio_int_data.tx_buf[0] = (size >= 1) ? packet[0] : 0x00;
+  radio_int_data.tx_buf[1] = (size >= 2) ? packet[1] : 0x00;
   while(times){
     for(word=0;word<2;word++){
       //verbprintf(1,"Send word %i %02X\n",word, radio_int_data.tx_buf[word]); 
@@ -1506,7 +1512,7 @@ void radio_send_packet(spi_parms_t *spi_parms, arguments_t *arguments, uint8_t *
 
     if (arguments->modulation == MOD_OOK_ASYNC ){
       verbprintf(1,"Modulation is OOK_ASYNC\n");
-      return radio_send_async(spi_parms, arguments->packet_length);/*Async Modulation*/
+      return radio_send_async(spi_parms, packet, size);/*Async Modulation*/
     }
 
     while (block_countdown >= 0)

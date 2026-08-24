@@ -84,6 +84,7 @@ typedef struct arguments_s {
     float        rate_skew;            // Data rate skew multiplier from nominal
     float        modulation_index;     // Modulation index
     uint32_t     freq_hz;              // Frequency in Hz
+    uint8_t      tx_power;             // Raw CC1101 PATABLE TX power byte (0x00 min .. 0xC0 typical max @433MHz)
     uint8_t      packet_length;        // Fixed packet length
     uint8_t      variable_length;      // Set variable length packet mode. Fixed packet argument becomes maximum packet size
     test_mode_t  test_mode;            // Enter testing mode with specified test scheme 

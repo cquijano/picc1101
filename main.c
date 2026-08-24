@@ -95,6 +95,7 @@ static struct argp_option options[] = {
     {"fec",  'F', 0, 0, "Activate FEC (default off)"},
     {"whitening",  'W', 0, 0, "Activate whitening (default off)"},
     {"frequency",  'f', "FREQUENCY_HZ", 0, "Frequency in Hz (default: 433600000)"},
+    {"tx-power",  'x', "PATABLE_BYTE", 0, "Raw CC1101 PATABLE TX power byte, 0x00 (min) .. 0xC0 (default, prior fixed value). Only applied in OOK/OOK-ASYNC modes (see PA_TABLE in radio.h)."},
     {"packet-length",  'P', "PACKET_LENGTH", 0, "Packet length (fixed) or maximum packet length (variable) (default: 250)"},
     {"variable-length",  'V', 0, 0, "Variable packet length. Given packet length becomes maximum length (default off)"},
     {"test-mode",  't', "TEST_SCHEME", 0, "Test scheme, See long help (-H) option fpr details (default : 0 no test)"},
@@ -175,6 +176,7 @@ static void init_args(arguments_t *arguments)
     arguments->packet_delay = 30;
     arguments->modulation_index = 0.5;
     arguments->freq_hz = 433600000;
+    arguments->tx_power = 0xC0;
     arguments->packet_length = 250;
     arguments->variable_length = 0;
     arguments->test_mode = TEST_NONE;
@@ -225,6 +227,7 @@ static void print_args(arguments_t *arguments)
     fprintf(stderr, "Packet delay ........: ~%d bytes with 2-FSK\n", arguments->packet_delay);
     fprintf(stderr, "Modulation index ....: %.2f\n", arguments->modulation_index);
     fprintf(stderr, "Frequency ...........: %d Hz\n", arguments->freq_hz);
+    fprintf(stderr, "TX power (PATABLE) ..: 0x%02X\n", arguments->tx_power);
     fprintf(stderr, "Packet length .......: %d bytes\n", arguments->packet_length);
     fprintf(stderr, "Variable length .....: %s\n", (arguments->variable_length ? "yes" : "no"));
     fprintf(stderr, "Preamble size .......: %d bytes\n", nb_preamble_bytes[arguments->preamble]);
@@ -375,7 +378,13 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state)
             arguments->freq_hz = strtol(arg, &end, 10);
             if (*end)
                 argp_usage(state);
-            break; 
+            break;
+        // TX power (raw PATABLE byte). Base 0: accepts "0xC0" or plain decimal.
+        case 'x':
+            arguments->tx_power = strtol(arg, &end, 0) % 256;
+            if (*end)
+                argp_usage(state);
+            break;
         // Packet length
         case 'P':
             arguments->packet_length = strtol(arg, &end, 10) % 256;

@@ -751,7 +751,10 @@ int init_radio(radio_parms_t *radio_parms, spi_parms_t *spi_parms, arguments_t *
 {
     int ret = 0;
     uint8_t  reg_word;
-    uint8_t patable[8]=PA_TABLE;
+    // index 0 = OOK '0' (off), index 1 = OOK '1' (on) — was a fixed PA_TABLE
+    // (radio.h) with 0xC0 baked in; now driven by -x/--tx-power so a bench
+    // operator can dial TX power down for antenna comparisons.
+    uint8_t patable[8] = {0x00, arguments->tx_power, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
     verbprintf(1, "\ninit_radio...\n");
 
